@@ -10,6 +10,7 @@ spec:
   provisioningUtility: "cloud-init"
   supportedCloudProviders:
     - name: "anexia"
+    - name: "edge"
 
   bootstrapConfig:
     templates:
