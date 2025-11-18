@@ -11,6 +11,7 @@ spec:
   supportedCloudProviders:
     - name: "anexia"
     - name: "edge"
+    - name: "ubuntu"
 
   bootstrapConfig:
     templates:
