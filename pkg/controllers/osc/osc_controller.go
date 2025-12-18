@@ -276,12 +276,6 @@ func (r *Reconciler) reconcileOperatingSystemConfigs(ctx context.Context, md *cl
 		return fmt.Errorf("failed to generate %s osc: %w", oscName, err)
 	}
 
-	if osc.Spec.CloudProvider.Name == "edge" {
-		if err := r.generateEdgeScript(ctx, md, token, bootstrapKubeconfig); err != nil {
-			return fmt.Errorf("failed to generate edge provider bootstrap script: %w", err)
-		}
-	}
-
 	// Add machine deployment revision to OSC
 	revision := md.Annotations[mcsdkcommon.RevisionAnnotation]
 	osc.Annotations = addMachineDeploymentRevision(revision, osc.Annotations)
@@ -297,6 +291,13 @@ func (r *Reconciler) reconcileOperatingSystemConfigs(ctx context.Context, md *cl
 		return fmt.Errorf("failed to create %s osc: %w", oscName, err)
 	}
 	r.log.Infof("successfully generated provisioning osc: %v", oscName)
+
+	if osc.Spec.CloudProvider.Name == "edge" {
+		if err := r.generateEdgeScript(ctx, md, token, bootstrapKubeconfig); err != nil {
+			return fmt.Errorf("failed to generate edge provider bootstrap script: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -477,8 +478,26 @@ func (r *Reconciler) generateEdgeScript(ctx context.Context, md *clusterv1alpha1
 
 	serverURL := config.Clusters[clusterName].Server
 	bootstrapSecretName := fmt.Sprintf("%s-%s-bootstrap-config", md.Name, md.Namespace)
-	script := fmt.Sprintf("apt-get update -y\napt-get install jq -y\ncurl -s -k -v --header 'Authorization: Bearer %s' %s/api/v1/namespaces/cloud-init-settings/secrets/%s | jq '.data[\"cloud-config\"]' -r| base64 -d > /etc/cloud/cloud.cfg.d/%s.cfg \ncloud-init --file /etc/cloud/cloud.cfg.d/%s.cfg init\nsystemctl enable bootstrap.service\nsystemctl restart bootstrap.service\n",
-		token, serverURL, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName)
+	script := fmt.Sprintf(`
+apt-get update -y
+apt-get install jq -y
+curl -s -k -v --header 'Authorization: Bearer %s' %s/api/v1/namespaces/cloud-init-settings/secrets/%s \
+  | jq '.data["cloud-config"]' -r \
+  | base64 -d > /etc/cloud/cloud.cfg.d/%s.cfg
+
+
+# Compare the semver values of cloud-init versions to determine the correct command to run.
+# This is required because the command line arguments for cloud-init changed in version 24.1, for details: https://github.com/canonical/cloud-init/releases/tag/24.1.
+export CLOUD_INIT_VERSION=$(cloud-init --version | awk '{print $2}')
+if [[ $(echo -e "24.0.0\n$CLOUD_INIT_VERSION" | sort -V | head -n1) = "24.0.0" ]]; then
+	cloud-init init --file /etc/cloud/cloud.cfg.d/%s.cfg  
+else
+  cloud-init --file /etc/cloud/cloud.cfg.d/%s.cfg init
+fi
+
+systemctl enable bootstrap.service
+systemctl restart bootstrap.service
+`, token, serverURL, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName)
 
 	scriptSecretName := fmt.Sprintf("edge-provider-script-%s-%s", md.Name, md.Namespace)
 	secret := &corev1.Secret{}
@@ -496,7 +515,11 @@ func (r *Reconciler) generateEdgeScript(ctx context.Context, md *clusterv1alpha1
 	secret.Namespace = bootstrap.CloudInitNamespace
 	secret.Data["fetch-bootstrap-script"] = []byte(script)
 
-	return r.workerClient.Create(ctx, secret)
+	err := r.workerClient.Create(ctx, secret)
+	if err != nil {
+		return fmt.Errorf("failed to create %s secret in namespace %s: %w", secret.Name, bootstrap.CloudInitNamespace, err)
+	}
+	return nil
 }
 
 // filterMachineDeploymentPredicate will filter machine deployments based on the presence of OSP annotation

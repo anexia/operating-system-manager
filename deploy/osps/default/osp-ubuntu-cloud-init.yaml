@@ -6,7 +6,7 @@ metadata:
 spec:
   osName: "ubuntu"
   osVersion: "24.04"
-  version: "v1.7.0"
+  version: "v1.8.0"
   provisioningUtility: "cloud-init"
   supportedCloudProviders:
     - name: "anexia"
@@ -742,6 +742,24 @@ spec:
                 modprobe nf_conntrack
               fi
               modprobe br_netfilter
+
+      - path: /etc/systemd/system/bootstrap.service
+        permissions: 644
+        content:
+          inline:
+            encoding: b64
+            data: |
+              [Install]
+              WantedBy=multi-user.target
+
+              [Unit]
+              Requires=network-online.target
+              After=network-online.target
+              [Service]
+              Type=oneshot
+              RemainAfterExit=true
+              EnvironmentFile=-/etc/environment
+              ExecStart=/opt/bin/supervise.sh /opt/bin/setup
 
     modules:
       runcmd:
