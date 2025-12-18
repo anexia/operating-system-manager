@@ -239,6 +239,9 @@ spec:
 
               systemctl daemon-reload
 
+              # reload sysctl config file, as it requires a reboot otherwise
+              sysctl --system
+
               {{- /* Since both container runtimes are enabled/started by default in flatcar, disable the one that is not required */}}
               {{- if eq .ContainerRuntime "containerd" }}
               systemctl stop docker
@@ -263,6 +266,7 @@ spec:
               systemctl enable --now kubelet
               systemctl enable --now --no-block kubelet-healthcheck.service
               systemctl disable setup.service
+
 
       - path: /opt/bin/health-monitor.sh
         permissions: 755
