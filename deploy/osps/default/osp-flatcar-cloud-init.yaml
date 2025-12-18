@@ -269,6 +269,8 @@ spec:
               {{- end }}
 
               systemctl daemon-reload
+              
+              sysctl --system
 
               {{- /* Since both container runtimes are enabled/started by default in flatcar, disable the one that is not required */}}
               {{- if eq .ContainerRuntime "containerd" }}
