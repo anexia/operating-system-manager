@@ -513,7 +513,11 @@ systemctl restart bootstrap.service
 	secret.Namespace = bootstrap.CloudInitNamespace
 	secret.Data["fetch-bootstrap-script"] = []byte(script)
 
-	return r.workerClient.Create(ctx, secret)
+	err := r.workerClient.Create(ctx, secret)
+	if err != nil {
+		return fmt.Errorf("failed to create %s secret in namespace %s: %w", secret.Name, bootstrap.CloudInitNamespace, err)
+	}
+	return nil
 }
 
 // filterMachineDeploymentPredicate will filter machine deployments based on the presence of OSP annotation
