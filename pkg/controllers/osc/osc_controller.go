@@ -276,12 +276,6 @@ func (r *Reconciler) reconcileOperatingSystemConfigs(ctx context.Context, md *cl
 		return fmt.Errorf("failed to generate %s osc: %w", oscName, err)
 	}
 
-	if osc.Spec.CloudProvider.Name == "edge" {
-		if err := r.generateEdgeScript(ctx, md, token, bootstrapKubeconfig); err != nil {
-			return fmt.Errorf("failed to generate edge provider bootstrap script: %w", err)
-		}
-	}
-
 	// Add machine deployment revision to OSC
 	revision := md.Annotations[mcsdkcommon.RevisionAnnotation]
 	osc.Annotations = addMachineDeploymentRevision(revision, osc.Annotations)
@@ -297,6 +291,13 @@ func (r *Reconciler) reconcileOperatingSystemConfigs(ctx context.Context, md *cl
 		return fmt.Errorf("failed to create %s osc: %w", oscName, err)
 	}
 	r.log.Infof("successfully generated provisioning osc: %v", oscName)
+
+	if osc.Spec.CloudProvider.Name == "edge" {
+		if err := r.generateEdgeScript(ctx, md, token, bootstrapKubeconfig); err != nil {
+			return fmt.Errorf("failed to generate edge provider bootstrap script: %w", err)
+		}
+	}
+
 	return nil
 }
 
