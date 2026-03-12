@@ -488,6 +488,7 @@ curl -s -k -v --header 'Authorization: Bearer %s' %s/api/v1/namespaces/cloud-ini
 
 # Compare the semver values of cloud-init versions to determine the correct command to run.
 # This is required because the command line arguments for cloud-init changed in version 24.1, for details: https://github.com/canonical/cloud-init/releases/tag/24.1.
+export CLOUD_INIT_VERSION=$(cloud-init --version | awk '{print $2}')
 if [[ $(echo -e "24.0.0\n$CLOUD_INIT_VERSION" | sort -V | head -n1) = "24.0.0" ]]; then
 	cloud-init init --file /etc/cloud/cloud.cfg.d/%s.cfg  
 else
