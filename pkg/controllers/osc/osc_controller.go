@@ -478,7 +478,24 @@ func (r *Reconciler) generateEdgeScript(ctx context.Context, md *clusterv1alpha1
 
 	serverURL := config.Clusters[clusterName].Server
 	bootstrapSecretName := fmt.Sprintf("%s-%s-bootstrap-config", md.Name, md.Namespace)
-	script := fmt.Sprintf(`
+
+	getConfig, err := providerconfig.GetConfig(md.Spec.Template.Spec.ProviderSpec)
+	if err != nil {
+		return err
+	}
+	var script string
+	if getConfig.OperatingSystem == "flatcar" {
+		script = fmt.Sprintf(`
+curl -s -k -v --header 'Authorization: Bearer %s' %s/api/v1/namespaces/cloud-init-settings/secrets/%s \
+  | jq '.data["cloud-config"]' -r \
+  | base64 -d > /tmp/%s.cfg
+
+coreos-cloudinit --from-file /tmp/%s.cfg 
+
+`, token, serverURL, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName)
+	}
+	if getConfig.OperatingSystem == "ubuntu" {
+		script = fmt.Sprintf(`
 apt-get update -y
 apt-get install jq -y
 curl -s -k -v --header 'Authorization: Bearer %s' %s/api/v1/namespaces/cloud-init-settings/secrets/%s \
@@ -498,6 +515,7 @@ fi
 systemctl enable bootstrap.service
 systemctl restart bootstrap.service
 `, token, serverURL, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName, bootstrapSecretName)
+	}
 
 	scriptSecretName := fmt.Sprintf("edge-provider-script-%s-%s", md.Name, md.Namespace)
 	secret := &corev1.Secret{}
@@ -515,7 +533,7 @@ systemctl restart bootstrap.service
 	secret.Namespace = bootstrap.CloudInitNamespace
 	secret.Data["fetch-bootstrap-script"] = []byte(script)
 
-	err := r.workerClient.Create(ctx, secret)
+	err = r.workerClient.Create(ctx, secret)
 	if err != nil {
 		return fmt.Errorf("failed to create %s secret in namespace %s: %w", secret.Name, bootstrap.CloudInitNamespace, err)
 	}
