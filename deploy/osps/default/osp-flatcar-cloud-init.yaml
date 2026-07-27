@@ -25,6 +25,7 @@ spec:
   provisioningUtility: "cloud-init"
   supportedCloudProviders:
     - name: "anexia"
+    - name: "edge"
 
   bootstrapConfig:
     templates:
@@ -565,6 +566,7 @@ spec:
               After={{ .ContainerRuntime }}.service
               {{- if eq .CloudProviderName "anexia" }}
               Wants={{ .ContainerRuntime }}.service rpc-statd.service
+              Wants=apply-sysctl-settings.service
               {{- else }}
               Wants={{ .ContainerRuntime }}.service
               {{- end }}
